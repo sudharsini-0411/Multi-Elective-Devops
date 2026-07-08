@@ -1,0 +1,324 @@
+--- ppt/slides/slide1.xml ---
+COURSE ALLOCATION
+Fairness-Weighted Elective Allocation
+A structured approach to distributing limited elective seats — balancing student preferences with historical allocation equity. This walkthrough demonstrates how the Fairness-Weighted Elective Allocation Algorithm (FWEAA) works in practice.
+
+--- ppt/slides/slide10.xml ---
+Case 2: λ = 0.5 (Balanced Fairness)
+Formula: PriorityScore = PreferencePoints + (
+\lambda
+ × FairnessScore)
+Student A
+250 + (0.5 × 10) = 255
+Student B
+240 + (0.5 × 80) = 280
+ 
+Winner: Student B (280 > 255)
+Observation: Both preference and fairness are considered equally. Previously disadvantaged students receive meaningful priority.
+
+--- ppt/slides/slide11.xml ---
+Case 3: λ = 0.9 (High Fairness)
+Formula: PriorityScore = PreferencePoints + (
+\lambda
+ × FairnessScore)
+Student A
+250 + (0.9 × 10) = 259
+Student B
+240 + (0.9 × 80) = 312
+ 
+Winner: Student B (312 > 259)
+Observation: Fairness dominates the allocation. Historical disadvantage has a very strong influence.
+
+--- ppt/slides/slide12.xml ---
+Comparison Table of λ Values
+λ Value
+Student A
+Student B
+Winner
+Interpretation
+0.1
+251
+248
+A
+Preference Dominates
+0.5
+255
+280
+B
+Balanced Approach
+0.9
+259
+312
+B
+Fairness Dominates
+
+--- ppt/slides/slide13.xml ---
+Key Insights
+Low λ (0.1)
+✅
+ Maximizes preference satisfaction
+❌
+ May repeatedly disadvantage some students
+Medium λ (0.5)
+✅
+ Balances preference and fairness
+✅
+ Recommended default value
+High λ (0.9)
+✅
+ Strongly compensates disadvantaged students
+❌
+ May reduce overall preference satisfaction
+
+--- ppt/slides/slide14.xml ---
+React + FastAPI + PostgreSQL
+Frameworks Used
+React.js – Frontend UI framework/library
+Tailwind CSS – CSS framework for responsive UI design
+FastAPI – Python backend API framework
+JWT Authentication – Secure authentication
+Technology Stack
+Frontend: React.js + Tailwind CSS
+Backend: Python + FastAPI
+Database: PostgreSQL
+Authentication: JWT
+Algorithm: FWEAA (Fairness Weighted Elective Allocation Algorithm)
+MERN Stack
+Framew
+orks Used
+React.js – Frontend UI framework/library
+Tailwind CSS – CSS framework
+Express.js – Backend web framework for Node.js
+JWT Authentication – Authentication mechanism
+Technology Stack
+Frontend: React.js + Tailwind CSS
+Backend: Node.js + Express.js
+Database: MongoDB
+Authentication: JWT
+Algorithm: FWEAA
+STEP 6 — Tech Stack
+Op
+tion A
+Op
+tion B
+
+--- ppt/slides/slide2.xml ---
+STEP 1 — SETUP
+Example Scenario
+Available Electives
+Three courses with limited capacity:
+DS
+2 seats
+AI
+2 seats
+ML
+1 seat
+Student Parameters
+5 students
+ competing for seats
+Each receives 
+500 points
+ to distribute
+Points reflect preference intensity
+Goal: fair allocation accounting for historical satisfaction
+
+--- ppt/slides/slide3.xml ---
+STEP 2 — PREFERENCES
+Student Preferences &amp; Fairness Scores
+Student
+DS Pref Points
+AI Pref Points
+ML Pref Points
+Historical Sat.
+Fairness Score
+A
+250
+150
+100
+90%
+10
+B
+240
+180
+80
+40%
+60
+C
+300
+100
+100
+80%
+20
+D
+200
+200
+100
+20%
+80
+E
+150
+250
+100
+50%
+50
+Fairness Score Formula:
+ 100 − Historical Satisfaction. Example: Student B → 100 − 40 = 
+60
+. Lower past satisfaction yields a higher fairness score.
+
+--- ppt/slides/slide4.xml ---
+STEP 3 — PRIORITY CALCULATION
+Priority Score Formula
+The Formula
+Fairness weight 
+λ = 0.5
+ balances preference points against equity:
+Higher fairness scores boost priority for students historically underserved by the allocation system.
+DS Course — Priority Scores
+Student
+Calculation
+Score
+A
+250 + (0.5 × 10)
+255
+B
+240 + (0.5 × 60)
+270
+C
+300 + (0.5 × 20)
+310
+D
+200 + (0.5 × 80)
+240
+E
+150 + (0.5 × 50)
+175
+PriorityScore=PreferencePoints+(λ×FairnessScore)
+
+--- ppt/slides/slide5.xml ---
+STEP 4 — ALLOCATION
+DS Seat Allocation — 2 Seats Available
+Ranked Priority Scores
+Rank
+Student
+Pref Point
+Priority
+1
+C
+300
+310 
+✅
+2
+B
+240
+270 
+✅
+3
+A
+250
+255
+4
+D
+200
+240
+5
+E
+150
+175
+Allocation Result
+✅
+ C → DS
+Highest priority score (310)
+✅
+ B → DS
+Second priority (270) — fairness boost helped
+❌
+ A, D, E
+Move to next preference
+
+--- ppt/slides/slide6.xml ---
+STEP 4 — CONTINUED
+AI Seat Allocation — 2 Seats Available
+Remaining Students — Ranked Scores
+Rank
+Student
+Pref Po
+ints
+Priority
+1
+E
+250
+275 
+✅
+2
+D
+200
+240 
+✅
+3
+A
+150
+155
+Allocation Result
+✅
+ E → AI
+Highest AI priority (275)
+✅
+ D → AI
+Second priority (240)
+❌
+ A → ML
+Proceeds to ML as final option
+
+--- ppt/slides/slide7.xml ---
+STEP 5 — FINAL RESULTS
+Final Allocation Summary
+Student
+Allocated Elective
+Fairness Score
+Historical Sat.
+A
+ML
+10
+90%
+B
+DS
+60
+40%
+C
+DS
+20
+80%
+D
+AI
+80
+20%
+E
+AI
+50
+50%
+All 5 students successfully allocated. Students with lower historical satisfaction (B, D, E) received fairness boosts that improved their competitive standing.
+
+--- ppt/slides/slide8.xml ---
+Impact of Different Fairness Weight (λ) Values
+Example Setup
+DS Course — 1 Seat Available
+Student A
+Preference Points: 250
+Fairness Score: 10 (always got preferred electives)
+Student B
+Preference Points: 240
+Fairness Score: 80 (frequently disadvantaged)
+
+--- ppt/slides/slide9.xml ---
+Case 1: λ = 0.1 (Low Fairness)
+Formula: PriorityScore = PreferencePoints + (
+\lambda
+ × FairnessScore)
+Student A
+250 + (0.1 × 10) = 251
+Student B
+240 + (0.1 × 80) = 248
+ 
+Winner: Student A (251 > 248)
+Observation: Fairness has very little influence. Allocation is driven mainly by student preferences.

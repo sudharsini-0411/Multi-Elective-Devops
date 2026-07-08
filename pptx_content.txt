@@ -1,0 +1,141 @@
+--- ppt/slides/slide1.xml ---
+MULTI ELECTIVE ALLOCATION WIT
+H INDUCED FAIRNESS
+PR
+ESENTATION
+Sudharsini R
+Subash S
+
+--- ppt/slides/slide2.xml ---
+PROBLEMS
+In
+ educational institutions, allocating elective subj
+ects is challenging because multiple students often choose the same electives while the number of available seats is limited. Existing allocation methods may lead to unfair distribution, where some students repeatedly miss their preferred electives. Therefore, a fair and transparent allocation system is needed to distribute electives efficiently while ensuring equal opportunities for all students.
+FI
+RST PROBLEM
+SECOND
+ PROBLEM
+In c
+olleges and universities, many students pref
+er the same popular elective subjects, but each elective has a limited number of seats. This creates competition among students and makes the allocation process challenging.
+T
+raditional allocation methods such as First-C
+ome-First-Serve, Random Selection, or CGPA-Based Allocation may not provide equal opportunities to all students. Some students repeatedly miss their preferred electives, leading to dissatisfaction and an unfair allocation proces
+
+--- ppt/slides/slide3.xml ---
+RESULT-1
+RESULT-2
+PROBLEM
+ IMPACT
+Ex
+ampl
+e
+AI Elective → 30 Seats
+Students Interested → 100
+Traditional systems:
+Allocate based only on marks or submission time.
+Students who missed preferred electives previously get no advantage.
+RESULT-3
+R
+epeated disadvantage f
+or some students.
+Un
+equal opportunity
+ among students.
+Inc
+reased complai
+nts and manual intervention.
+
+--- ppt/slides/slide4.xml ---
+P
+ROPOSED 
+SOLUTI
+ON
+A
+ web-bas
+ed system that allocates elective subjects fairly by considering student preferences, seat availability, and fairness scores. The system ensures that students who previously missed their preferred electives receive higher priority in future allocations, providing equal opportunities and transparent seat distribution.
+OBJECTIV
+E
+KEY INN
+OVATION
+T
+o develop a fair and automated elective allocation system that assigns elective subj
+ects based on student preferences, seat availability, and fairness criteria, ensuring equal opportunities, improved student satisfaction, and transparent allocation of limited seats.
+Th
+e key innovation of this project is th
+e Induced Fairness Mechanism, which considers a student's previous allocation outcomes while assigning electives. Students who repeatedly miss their preferred electives are given higher priority in future allocations, ensuring a fair, balanced, and transparent elective distribution process
+
+--- ppt/slides/slide5.xml ---
+Fai
+r and b
+alanced elective distribution.
+PROPOSED ALGOR
+ITHM
+P
+roposed A
+lgorithm
+Fairness Weighted Elective Allocation Algorithm (FWEAA)
+W
+orking Steps
+Student registers and logs in.
+Student selects elective preferences.
+System stores preferences in database.
+Fairness score is assigned:
+New Student → Default Score
+Existing Student → Based on previous allocation history
+System calculates final allocation score.
+Students are ranked.
+Seats are allocated.
+Waitlist is generated for remaining students.
+Outcome
+
+--- ppt/slides/slide6.xml ---
+FAIRNESS MECHANISM
+N
+ew Students
+Assig
+ned a default fairness score.
+EXISTING
+ STUDENTS
+BENEFITS
+Fai
+rness score increases whe
+n:
+1st preference is not allocated.
+Lower-priority elective is assigned.
+Student is waitlisted.
+Reduc
+es repeated disadvantage.
+Impr
+oves equal opportunity.
+Enhances student satisfaction.
+Maintains transparency.
+
+--- ppt/slides/slide7.xml ---
+TECHNOLOGY 
+                      STACK
+FRONTEND
+BACK
+END
+DATABAS
+E
+HTM
+L
+CSS
+JavaScript
+R
+eact.js
+Py
+thon
+Flask 
+MySQ
+L
+
+--- ppt/slides/slide8.xml ---
+
+
+--- ppt/slides/slide9.xml ---
+THANK
+YOU
+PR
+ESENTATION

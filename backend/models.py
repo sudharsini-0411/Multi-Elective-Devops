@@ -2,7 +2,12 @@ from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash as _check_password_hash
 from bson import ObjectId
 import os
+from dotenv import load_dotenv
+from supabase import create_client
 
+load_dotenv()
+
+# ── MongoDB ──────────────────────────────────────────────────────────────────
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/')
 DB_NAME = os.environ.get('DB_NAME', 'fairelect')
 
@@ -20,6 +25,11 @@ config_col = mongo['system_config']
 # Ensure unique indexes
 users_col.create_index('username', unique=True)
 electives_col.create_index('code', unique=True)
+
+# ── Supabase ─────────────────────────────────────────────────────────────────
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
+SUPABASE_KEY = os.environ.get('SUPABASE_SERVICE_KEY', '')
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
 
 def check_password_hash(hash_val, password):
     return _check_password_hash(hash_val, password)

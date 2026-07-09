@@ -4,6 +4,9 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required
 import os
 import datetime
 import math
+from dotenv import load_dotenv
+
+load_dotenv()
 
 import models
 import allocation
@@ -523,4 +526,4 @@ def _calculate_stats(updated_student_map, students, electives, all_prefs, sat_co
     }
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5000, use_reloader=False)

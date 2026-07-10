@@ -9,6 +9,7 @@ export default function AdminDashboard({ user }) {
   const [electives, setElectives] = useState([]);
   const [students, setStudents] = useState([]);
   const [allocations, setAllocations] = useState([]);
+  const [allAllocationsHistory, setAllAllocationsHistory] = useState([]);
   const [config, setConfig] = useState({ bidding_status: 'closed', bidding_deadline: '', server_time: '', allocation_status: 'draft' });
   
   // Navigation
@@ -106,8 +107,16 @@ export default function AdminDashboard({ user }) {
 
   const formatTimeLeft = () => {
     if (timeLeft === null || timeLeft <= 0) return '00:00';
-    const mins = Math.floor(timeLeft / 60);
+    const days = Math.floor(timeLeft / (24 * 3600));
+    const hours = Math.floor((timeLeft % (24 * 3600)) / 3600);
+    const mins = Math.floor((timeLeft % 3600) / 60);
     const secs = timeLeft % 60;
+    if (days > 0) {
+      return `${days}d ${hours}h ${mins}m ${secs}s`;
+    }
+    if (hours > 0) {
+      return `${hours}h ${mins}m ${secs}s`;
+    }
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
@@ -162,6 +171,10 @@ export default function AdminDashboard({ user }) {
       const allocRes = await fetch(`${API_URL}/allocation/results?semester=${encodeURIComponent(currentSem)}`);
       const allocData = await allocRes.json();
       setAllocations(allocData);
+
+      const allAllocRes = await fetch(`${API_URL}/allocation/history/all`);
+      const allAllocData = await allAllocRes.json();
+      setAllAllocationsHistory(allAllocData);
     } catch (err) {
       console.error("Error loading admin data:", err);
     }
@@ -173,7 +186,7 @@ export default function AdminDashboard({ user }) {
     setSelectedStudentId(null);
     setStudentUsername('');
     setStudentPassword('');
-    setStudentHistSat(0.0);
+    setStudentHistSat(1.0);
     setStudentMaxEl(1);
     setStudentName('');
     setStudentRollNo('');
@@ -687,15 +700,15 @@ export default function AdminDashboard({ user }) {
       headers = ['Student Username', 'Allocated Course Code', 'Allocated Course Name', 'Bid Points', 'Preference Rank', 'Post-allocation Satisfaction'];
       filename = 'Student_Wise_Allocation_Report.csv';
       rows = students.map(s => {
-        const alloc = allocations.find(a => a.user_id === s.id);
-        const pref = s.preferences ? s.preferences.find(p => alloc && p.elective_id === alloc.elective_id) : null;
+        const alloc = allocations.find(a => String(a.user_id) === String(s.id));
+        const pref = s.preferences ? s.preferences.find(p => alloc && String(p.elective_id) === String(alloc.elective_id)) : null;
         return [
           s.username,
           alloc ? alloc.code : 'Unallocated',
           alloc ? alloc.name : '-',
           pref ? pref.points : '0',
           pref ? pref.rank : '-',
-          s.historical_satisfaction.toFixed(2)
+          ((s.historical_satisfaction || 0.0) * 100).toFixed(0) + '%'
         ];
       });
     } else if (reportType === 'elective') {
@@ -707,8 +720,8 @@ export default function AdminDashboard({ user }) {
           rows.push([e.code, e.name, e.instructor || '-', 'None Allocated', '-', '-']);
         } else {
           allocsForE.forEach(a => {
-            const stud = students.find(s => s.id === a.user_id);
-            const pref = stud && stud.preferences ? stud.preferences.find(p => p.elective_id === e.id) : null;
+            const stud = students.find(s => String(s.id) === String(a.user_id));
+            const pref = stud && stud.preferences ? stud.preferences.find(p => String(p.elective_id) === String(e.id)) : null;
             rows.push([
               e.code,
               e.name,
@@ -854,6 +867,9 @@ export default function AdminDashboard({ user }) {
         <button onClick={() => setActiveTab('reports')} className={`nav-link ${activeTab === 'reports' ? 'active' : ''}`} style={{ flex: 1, padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
           Reports & Analytics
         </button>
+        <button onClick={() => setActiveTab('history')} className={`nav-link ${activeTab === 'history' ? 'active' : ''}`} style={{ flex: 1, padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+          Allocation History
+        </button>
       </nav>
 
       {/* Global Alerts */}
@@ -900,8 +916,23 @@ export default function AdminDashboard({ user }) {
                 )}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label className="glass-label">Set Bidding Window Duration (Minutes)</label>
-                  <input type="number" min="1" max="120" className="glass-input" disabled={config.bidding_status === 'open'} value={biddingDuration} onChange={e => setBiddingDuration(parseInt(e.target.value))} />
+                  <label className="glass-label">Set Bidding Window Duration</label>
+                  <select 
+                    className="glass-input" 
+                    disabled={config.bidding_status === 'open'} 
+                    value={biddingDuration} 
+                    onChange={e => setBiddingDuration(parseInt(e.target.value))}
+                    style={{ background: 'var(--bg-glass)', color: 'var(--text-primary)', border: '1px solid rgba(255,255,255,0.08)' }}
+                  >
+                    <option value="5">5 Minutes (Testing)</option>
+                    <option value="10">10 Minutes (Testing)</option>
+                    <option value="60">1 Hour</option>
+                    <option value="300">5 Hours</option>
+                    <option value="720">12 Hours</option>
+                    <option value="1440">1 Day</option>
+                    <option value="4320">3 Days</option>
+                    <option value="10080">7 Days</option>
+                  </select>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -943,7 +974,7 @@ export default function AdminDashboard({ user }) {
               </div>
             </div>
 
-            {/* Advance to Next Semester */}
+            {/* Semester Management Display */}
             <div className="glass-panel" style={{ padding: '24px', borderLeft: '4px solid var(--accent-primary)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                 <SkipForward size={18} style={{ color: 'var(--accent-primary)' }} />
@@ -953,20 +984,9 @@ export default function AdminDashboard({ user }) {
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Active Semester:</span>
                 <span style={{ fontWeight: 800, color: 'var(--accent-primary)', fontSize: '1rem' }}>{config.current_semester || 'Semester 1'}</span>
               </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '16px', lineHeight: 1.5 }}>
-                After publishing, archive results and open the next semester's bidding round. Previous records stay as student history.
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                Publishing results will automatically archive current allocations to the History tab, clear current student bidding preferences, reset seats, and advance the active semester counter.
               </p>
-              <button
-                onClick={handleAdvanceSemester}
-                disabled={config.allocation_status !== 'published' || loading}
-                className="btn-primary"
-                style={{ width: '100%', padding: '12px', fontSize: '0.9rem', fontWeight: 700, opacity: config.allocation_status !== 'published' ? 0.4 : 1 }}
-              >
-                ⏭ Advance to Next Semester
-              </button>
-              {config.allocation_status !== 'published' && (
-                <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '8px', textAlign: 'center' }}>Publish results first to enable semester advancement</p>
-              )}
             </div>
 
             {/* Global parameters tuner */}
@@ -1049,7 +1069,7 @@ export default function AdminDashboard({ user }) {
                       // 1. Allocation has been run for this semester (allocation_ran flag is true)
                       // 2. The student has submitted bids (to avoid showing stale records)
                       const allocsForS = (config.allocation_ran && prefs.length > 0)
-                        ? allocations.filter(a => a.user_id === s.id)
+                        ? allocations.filter(a => String(a.user_id) === String(s.id))
                         : [];
                       return (
                         <tr key={s.id}>
@@ -1360,8 +1380,8 @@ export default function AdminDashboard({ user }) {
                     return (
                       <tr key={s.id}>
                         <td style={{ fontWeight: 600 }}>{s.username}</td>
-                        <td style={{ fontWeight: 700, color: 'var(--accent-secondary)' }}>{s.historical_satisfaction.toFixed(2)}</td>
-                        <td style={{ fontWeight: 800, color: 'var(--success)' }}>{fairness.toFixed(2)}</td>
+                        <td style={{ fontWeight: 700, color: 'var(--accent-secondary)' }}>{((s.historical_satisfaction || 0.0) * 100).toFixed(0)}%</td>
+                        <td style={{ fontWeight: 800, color: 'var(--success)' }}>{((fairness || 0.0) * 100).toFixed(0)}%</td>
                         <td>
                           {isNew ? (
                             <span className="badge badge-info" style={{ fontSize: '0.7rem' }}>New Student (Baseline Bidding)</span>
@@ -1411,7 +1431,7 @@ export default function AdminDashboard({ user }) {
                     return (
                       <tr key={s.id}>
                         <td style={{ fontWeight: 600 }}>{s.username}</td>
-                        <td style={{ fontWeight: 700 }}>{hPrev.toFixed(2)}</td>
+                        <td style={{ fontWeight: 700 }}>{((hPrev || 0.0) * 100).toFixed(0)}%</td>
                         <td style={{ fontWeight: 800, color: 'var(--accent-primary)' }}>{isNew ? 'Randomized' : lVal.toFixed(2)}</td>
                         <td>
                           {isNew ? (
@@ -1480,7 +1500,7 @@ export default function AdminDashboard({ user }) {
                           <tr key={`${s.id}-${p.code}`} style={{ borderBottom: idx === prefs.length - 1 ? '2px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.02)' }}>
                             {idx === 0 && <td rowSpan={prefs.length} style={{ fontWeight: 600, borderRight: '1px solid rgba(255,255,255,0.04)' }}>{s.username}</td>}
                             {idx === 0 && <td rowSpan={prefs.length} style={{ borderRight: '1px solid rgba(255,255,255,0.04)' }}>{isNew ? '-' : lVal.toFixed(2)}</td>}
-                            {idx === 0 && <td rowSpan={prefs.length} style={{ borderRight: '1px solid rgba(255,255,255,0.04)' }}>{isNew ? '-' : fScore.toFixed(2)}</td>}
+                            {idx === 0 && <td rowSpan={prefs.length} style={{ borderRight: '1px solid rgba(255,255,255,0.04)' }}>{isNew ? '-' : `${((fScore || 0.0) * 100).toFixed(0)}%`}</td>}
                             <td><span className="badge badge-info">{p.code}</span></td>
                             <td style={{ fontWeight: 600 }}>{p.points}</td>
                             <td>{(p.points / 500).toFixed(2)}</td>
@@ -1546,7 +1566,7 @@ export default function AdminDashboard({ user }) {
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '8px' }}>Step 5: Run Allocation & Step Through Queue Pop</h3>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                   Pop entries off the priority heap one by one. Check seat availability ("Monitor Seat Availability"), and assign seats.
-                  After an allocation, recalculate satisfaction using PRSM and update historical records using RAA.
+                  After an allocation, recalculate satisfaction using PRSM and update historical records using a Simple Running Average.
                 </p>
               </div>
 
@@ -1591,8 +1611,8 @@ export default function AdminDashboard({ user }) {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginTop: '16px', fontSize: '0.8rem', background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '8px' }}>
                           <div><strong>Bid Points:</strong> {activeWizardState.currentEvent.preference_points}</div>
                           <div><strong>Priority Score:</strong> {activeWizardState.currentEvent.score.toFixed(3)}</div>
-                          <div><strong>Satisfaction Prev:</strong> {activeWizardState.currentEvent.historical_satisfaction_prev.toFixed(2)}</div>
-                          <div><strong>Satisfaction New:</strong> {activeWizardState.currentEvent.historical_satisfaction_new.toFixed(2)}</div>
+                          <div><strong>Satisfaction Prev:</strong> {((activeWizardState.currentEvent.historical_satisfaction_prev || 0.0) * 100).toFixed(0)}%</div>
+                          <div><strong>Satisfaction New:</strong> {((activeWizardState.currentEvent.historical_satisfaction_new || 0.0) * 100).toFixed(0)}%</div>
                           <div><strong>Lambda Weight:</strong> {activeWizardState.currentEvent.lambda_new ? activeWizardState.currentEvent.lambda_new.toFixed(2) : '-'}</div>
                           <div><strong>Remaining Seats:</strong> {activeWizardState.currentEvent.seats_remaining}</div>
                         </div>
@@ -1637,7 +1657,7 @@ export default function AdminDashboard({ user }) {
                                     <div style={{ height: '100%', background: 'var(--accent-gradient)', width: `${sat * 100}%` }}></div>
                                   </div>
                                 </div>
-                                <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{sat.toFixed(2)}</span>
+                                <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{((sat || 0.0) * 100).toFixed(0)}%</span>
                               </div>
                             );
                           })}
@@ -1670,20 +1690,20 @@ export default function AdminDashboard({ user }) {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
                     <div className="glass-panel" style={{ padding: '16px', background: 'rgba(16, 185, 129, 0.03)', border: '1px solid rgba(16, 185, 129, 0.15)' }}>
                       <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>Average Satisfaction</span>
-                      <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--success)' }}>{simStats.fairelect.avg.toFixed(2)}</span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>Traditional Bidding: {simStats.traditional.avg.toFixed(2)}</span>
+                      <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--success)' }}>{((simStats.fairelect.avg || 0.0) * 100).toFixed(0)}%</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>Traditional Bidding: {((simStats.traditional.avg || 0.0) * 100).toFixed(0)}%</span>
                     </div>
 
                     <div className="glass-panel" style={{ padding: '16px', background: 'rgba(99, 102, 241, 0.03)', border: '1px solid rgba(99, 102, 241, 0.15)' }}>
                       <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>Min Satisfaction (Neglected saved)</span>
-                      <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--accent-primary)' }}>{simStats.fairelect.min.toFixed(2)}</span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>Traditional Bidding: {simStats.traditional.min.toFixed(2)}</span>
+                      <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--accent-primary)' }}>{((simStats.fairelect.min || 0.0) * 100).toFixed(0)}%</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>Traditional Bidding: {((simStats.traditional.min || 0.0) * 100).toFixed(0)}%</span>
                     </div>
 
                     <div className="glass-panel" style={{ padding: '16px', background: 'rgba(245, 158, 11, 0.03)', border: '1px solid rgba(245, 158, 11, 0.15)' }}>
                       <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>Unfairness Index (StdDev)</span>
-                      <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--warning)' }}>{simStats.fairelect.std_dev.toFixed(2)}</span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>Traditional Bidding: {simStats.traditional.std_dev.toFixed(2)} (Lower is better)</span>
+                      <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--warning)' }}>{((simStats.fairelect.std_dev || 0.0) * 100).toFixed(0)}%</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>Traditional Bidding: {((simStats.traditional.std_dev || 0.0) * 100).toFixed(0)}% (Lower is better)</span>
                     </div>
                   </div>
 
@@ -1753,8 +1773,8 @@ export default function AdminDashboard({ user }) {
                 </thead>
                 <tbody>
                   {students.map(s => {
-                    const alloc = allocations.find(a => a.user_id === s.id);
-                    const pref = s.preferences ? s.preferences.find(p => alloc && p.elective_id === alloc.elective_id) : null;
+                    const alloc = allocations.find(a => String(a.user_id) === String(s.id));
+                    const pref = s.preferences ? s.preferences.find(p => alloc && String(p.elective_id) === String(alloc.elective_id)) : null;
                     return (
                       <tr key={s.id}>
                         <td style={{ fontWeight: 600 }}>{s.username}</td>
@@ -1799,8 +1819,8 @@ export default function AdminDashboard({ user }) {
                       ) : (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                           {allocsForE.map(a => {
-                            const stud = students.find(s => s.id === a.user_id);
-                            const pref = stud && stud.preferences ? stud.preferences.find(p => p.elective_id === e.id) : null;
+                            const stud = students.find(s => String(s.id) === String(a.user_id));
+                            const pref = stud && stud.preferences ? stud.preferences.find(p => String(p.elective_id) === String(e.id)) : null;
                             return (
                               <span key={a.id} className="badge badge-success" style={{ padding: '6px 12px', fontSize: '0.75rem' }}>
                                 {stud ? stud.username : 'Unknown'} {pref ? `(${pref.points}pts)` : ''}
@@ -1863,6 +1883,86 @@ export default function AdminDashboard({ user }) {
         </div>
       )}
 
+      {/* TAB 7: ALLOCATION HISTORY */}
+      {activeTab === 'history' && (
+        <div className="no-print animate-fade-in glass-panel" style={{ padding: '28px' }}>
+          <div>
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '4px' }}>Allocation History</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '24px' }}>
+              Past semester allocation records. The system dashboard displays only the active semester.
+            </p>
+          </div>
+
+          {(() => {
+            const currentSem = config.current_semester || 'Semester 1';
+            const pastAllocations = allAllocationsHistory.filter(a => a.semester !== currentSem);
+
+            const semMap = {};
+            pastAllocations.forEach(a => {
+              if (!semMap[a.semester]) semMap[a.semester] = [];
+              semMap[a.semester].push(a);
+            });
+
+            const semesters = Object.keys(semMap).sort().reverse();
+
+            if (semesters.length === 0) {
+              return (
+                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
+                  <BookOpen size={32} style={{ marginBottom: '12px', strokeWidth: 1 }} />
+                  <p style={{ fontSize: '0.85rem', fontWeight: 600 }}>No past semester allocation records found</p>
+                </div>
+              );
+            }
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                {semesters.map(sem => (
+                  <div key={sem} style={{ padding: '20px', background: 'rgba(255,255,255,0.01)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                    <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-secondary)', marginBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
+                      {sem}
+                    </h4>
+                    <table className="glass-table">
+                      <thead>
+                        <tr>
+                          <th>Student</th>
+                          <th>Allocated Course</th>
+                          <th>Historical Satisfaction</th>
+                          <th>Allocation Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {semMap[sem].map(a => {
+                          const stud = students.find(s => String(s.id) === String(a.user_id));
+                          const satHist = stud && stud.satisfaction_history
+                            ? stud.satisfaction_history.find(h => h.semester === a.semester)
+                            : null;
+                          const hsVal = satHist ? `${(satHist.historical_satisfaction_after * 100).toFixed(0)}%` : '-';
+                          const dateVal = satHist && satHist.created_at
+                            ? new Date(satHist.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+                            : (a.created_at ? new Date(a.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : new Date().toLocaleDateString());
+
+                          return (
+                            <tr key={a.id}>
+                              <td style={{ fontWeight: 600 }}>{a.username}</td>
+                              <td>
+                                <span className="badge badge-success" style={{ marginRight: '8px' }}>{a.code}</span>
+                                {a.name}
+                              </td>
+                              <td style={{ fontWeight: 'bold' }}>{hsVal}</td>
+                              <td>{dateVal}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* --- CRUD MODALS --- */}
 
       {/* Student Add/Edit Modal */}
@@ -1896,8 +1996,8 @@ export default function AdminDashboard({ user }) {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label className="glass-label">Historical Satisfaction (0.0 to 1.0)</label>
-                <input type="number" step="0.05" min="0.0" max="1.0" className="glass-input" value={studentHistSat} onChange={e => setStudentHistSat(parseFloat(e.target.value))} />
+                <label className="glass-label">Historical Satisfaction (%)</label>
+                <input type="number" step="1" min="0" max="100" className="glass-input" placeholder="e.g. 80" value={Math.round((studentHistSat || 0.0) * 100)} onChange={e => setStudentHistSat((parseFloat(e.target.value) || 0) / 100)} />
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -1972,13 +2072,13 @@ export default function AdminDashboard({ user }) {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label className="glass-label">Satisfaction Score (0.0 to 1.0)</label>
-                <input type="number" step="0.05" min="0.0" max="1.0" className="glass-input" value={satScore} onChange={e => setSatScore(parseFloat(e.target.value))} />
+                <label className="glass-label">Satisfaction Score (%)</label>
+                <input type="number" step="1" min="0" max="100" className="glass-input" value={Math.round((satScore || 0.0) * 100)} onChange={e => setSatScore((parseFloat(e.target.value) || 0) / 100)} />
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label className="glass-label">Historical Satisfaction After (0.0 to 1.0)</label>
-                <input type="number" step="0.05" min="0.0" max="1.0" className="glass-input" value={satHistAfter} onChange={e => setSatHistAfter(parseFloat(e.target.value))} />
+                <label className="glass-label">Historical Satisfaction After (%)</label>
+                <input type="number" step="1" min="0" max="100" className="glass-input" value={Math.round((satHistAfter || 0.0) * 100)} onChange={e => setSatHistAfter((parseFloat(e.target.value) || 0) / 100)} />
               </div>
 
               <button type="submit" className="btn-primary" style={{ padding: '12px', fontSize: '0.85rem', width: '100%', marginTop: '8px' }} disabled={loading}>

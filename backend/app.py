@@ -5,7 +5,6 @@ import os
 import datetime
 import math
 from dotenv import load_dotenv
-
 load_dotenv()
 
 import models
@@ -27,7 +26,7 @@ def register():
     username = data.get('username')
     password = data.get('password')
     role = data.get('role', 'student')
-    hist_sat = data.get('historical_satisfaction', 0.0)
+    hist_sat = data.get('historical_satisfaction', 1.0)
     max_el = data.get('max_electives', 1)
     name = data.get('name')
     roll_no = data.get('roll_no')
@@ -162,6 +161,80 @@ def handle_config():
 
     if allocation_status is not None:
         models.set_config_value('allocation_status', allocation_status)
+        if allocation_status == 'published':
+            current_sem = models.get_config_value('current_semester', 'Semester 1')
+            
+            # 1. Update Historical Satisfaction using RAA sequentially on the finalized allocations
+            students_input, _, all_prefs, _, _ = _get_allocation_inputs()
+            allocs = models.supabase.table('allocations').select('*').eq('semester', current_sem).execute().data
+            
+            student_map = {str(s['id']): s for s in students_input}
+            student_prefs = {}
+            for p in all_prefs:
+                s_id = str(p['user_id'])
+                if s_id not in student_prefs:
+                    student_prefs[s_id] = []
+                student_prefs[s_id].append(p)
+                
+            for s_id, prefs in student_prefs.items():
+                prefs.sort(key=lambda x: (-x['points'], x['rank']))
+                for idx, pref in enumerate(prefs):
+                    pref['rank'] = idx + 1
+                    
+            allocs_by_user = {}
+            for a in allocs:
+                s_id = str(a['user_id'])
+                if s_id not in allocs_by_user:
+                    allocs_by_user[s_id] = []
+                allocs_by_user[s_id].append(a)
+                
+            for s_id, student in student_map.items():
+                h_prev = student['historical_satisfaction']
+                prefs = student_prefs.get(s_id, [])
+                total_prefs = len(prefs)
+                
+                user_allocs = allocs_by_user.get(s_id, [])
+                if user_allocs:
+                    for a in user_allocs:
+                        matching_pref = next((p for p in prefs if str(p['elective_id']) == str(a['elective_id'])), None)
+                        a['rank'] = matching_pref['rank'] if matching_pref else 1
+                    user_allocs.sort(key=lambda x: x['rank'])
+                    
+                    h_curr = h_prev
+                    first_sat_score = None
+                    for a in user_allocs:
+                        s_curr = allocation.get_prsm_satisfaction(a['rank'], total_prefs)
+                        if first_sat_score is None:
+                            first_sat_score = s_curr
+                        h_curr = allocation.apply_running_avg(h_curr, s_curr)
+                    
+                    h_final = h_curr
+                else:
+                    first_sat_score = 0.0
+                    h_final = allocation.apply_running_avg(h_prev, 0.0)
+                    
+                models.supabase.table('users').update({'historical_satisfaction': h_final}).eq('id', s_id).execute()
+                models.supabase.table('satisfaction_history').insert({
+                    'user_id': s_id,
+                    'semester': current_sem,
+                    'satisfaction_score': first_sat_score,
+                    'historical_satisfaction_after': h_final
+                }).execute()
+
+            # 2. Advance semester counter
+            try:
+                parts = current_sem.rsplit(' ', 1)
+                new_semester = f"{parts[0]} {int(parts[-1]) + 1}"
+            except Exception:
+                new_semester = 'Semester 2'
+            models.set_config_value('current_semester', new_semester)
+            models.set_config_value('bidding_status', 'closed')
+            models.set_config_value('bidding_deadline', '')
+            models.set_config_value('allocation_status', 'draft')
+            models.set_config_value('allocation_ran', 'false')
+            models.supabase.table('preferences').delete().neq('id', 0).execute()
+            for el in models.get_all_electives():
+                models.supabase.table('electives').update({'seats_remaining': el['capacity']}).eq('id', el['id']).execute()
     if current_semester is not None:
         models.set_config_value('current_semester', current_semester)
 
@@ -248,10 +321,68 @@ def handle_preferences():
 def handle_students():
     if request.method == 'GET':
         students = models.get_all_students()
+        if not students:
+            return jsonify([]), 200
+        
+        # 1. Fetch all electives and map them
+        electives = models.get_all_electives()
+        elective_map = {str(e['id']): e for e in electives}
+        
+        # 2. Fetch all preferences
+        prefs_res = models.supabase.table('preferences').select('*').execute()
+        prefs_data = prefs_res.data
+        
+        # 3. Fetch all allocations
+        allocs_res = models.supabase.table('allocations').select('*').execute()
+        allocs_data = allocs_res.data
+        
+        # 4. Fetch all satisfaction history
+        sat_res = models.supabase.table('satisfaction_history').select('*').execute()
+        sat_data = sat_res.data
+        
+        # Map them by user_id
+        prefs_by_user = {}
+        for p in prefs_data:
+            u_id = str(p['user_id'])
+            if u_id not in prefs_by_user:
+                prefs_by_user[u_id] = []
+            el = elective_map.get(str(p['elective_id']))
+            prefs_by_user[u_id].append({
+                'elective_id': str(p['elective_id']),
+                'code': el['code'] if el else '',
+                'name': el['name'] if el else '',
+                'points': p['points'],
+                'rank': p['rank']
+            })
+            
+        allocs_by_user = {}
+        for a in allocs_data:
+            u_id = str(a['user_id'])
+            if u_id not in allocs_by_user:
+                allocs_by_user[u_id] = []
+            el = elective_map.get(str(a['elective_id']))
+            allocs_by_user[u_id].append({
+                'semester': a['semester'],
+                'code': el['code'] if el else '',
+                'name': el['name'] if el else '',
+                'instructor': el['instructor'] if el else '',
+                'created_at': a.get('created_at')
+            })
+            
+        sat_by_user = {}
+        for h in sat_data:
+            u_id = str(h['user_id'])
+            if u_id not in sat_by_user:
+                sat_by_user[u_id] = []
+            sat_by_user[u_id].append(h)
+            
+        # Merge back into the students array
         for s in students:
-            s['satisfaction_history'] = models.get_student_satisfaction_history(s['id'])
-            s['preferences'] = models.get_student_preferences(s['id'])
-            s['allocation_history'] = models.get_student_allocation_history(s['id'])
+            s_id = str(s['id'])
+            s['preferences'] = prefs_by_user.get(s_id, [])
+            s['allocation_history'] = allocs_by_user.get(s_id, [])
+            s['satisfaction_history'] = sat_by_user.get(s_id, [])
+            
         return jsonify(students), 200
 
     data = request.json or {}
@@ -366,21 +497,34 @@ def handle_single_satisfaction_record(record_id):
 def _get_allocation_inputs():
     students_raw = models.get_all_students()
     electives_raw = models.get_all_electives()
-    students = [{'id': s['id'], 'username': s['username'], 'historical_satisfaction': s['historical_satisfaction'], 'max_electives': s.get('max_electives', 1)} for s in students_raw]
+    
+    students = []
+    sat_counts = {}
+    students_with_hist = set()
+
+    for s in students_raw:
+        hist = models.get_student_satisfaction_history(s['id'])
+        if hist:
+            latest_hist = hist[-1]
+            phs = latest_hist['historical_satisfaction_after']
+            students_with_hist.add(s['id'])
+            sat_counts[s['id']] = len(hist)
+        else:
+            phs = 1.0
+            
+        students.append({
+            'id': s['id'],
+            'username': s['username'],
+            'historical_satisfaction': phs,
+            'max_electives': s.get('max_electives', 1)
+        })
+
     electives = [{'id': e['id'], 'code': e['code'], 'name': e['name'], 'capacity': e['capacity'], 'seats_remaining': e['seats_remaining'], 'instructor': e['instructor']} for e in electives_raw]
 
     all_prefs = []
     for s in students_raw:
         for p in models.get_student_preferences(s['id']):
             all_prefs.append({'user_id': s['id'], 'elective_id': p['elective_id'], 'points': p['points'], 'rank': p['rank']})
-
-    sat_counts = {}
-    students_with_hist = set()
-    for s in students_raw:
-        hist = models.get_student_satisfaction_history(s['id'])
-        if hist:
-            students_with_hist.add(s['id'])
-            sat_counts[s['id']] = len(hist)
 
     new_student_ids = set(s['id'] for s in students) - students_with_hist
     return students, electives, all_prefs, new_student_ids, sat_counts
@@ -423,27 +567,16 @@ def run():
     )
 
     try:
-        models.allocations_col.delete_many({'semester': semester})
-        models.satisfaction_col.delete_many({'semester': semester})
+        models.supabase.table('allocations').delete().eq('semester', semester).execute()
 
         for alloc in allocations:
-            models.allocations_col.insert_one({
+            models.supabase.table('allocations').insert({
                 'user_id': alloc['user_id'], 'elective_id': alloc['elective_id'], 'semester': semester
-            })
-
-        for s_id, s in updated_student_map.items():
-            h_new = s['curr_hist_sat']
-            models.users_col.update_one({'_id': __import__('bson').ObjectId(s_id)}, {'$set': {'historical_satisfaction': h_new}})
-            allocs_for_s = [a for a in allocations if a['user_id'] == s_id]
-            s_curr = allocation.get_prsm_satisfaction(allocs_for_s[0]['rank'], s['total_prefs']) if allocs_for_s else 0.0
-            models.satisfaction_col.insert_one({
-                'user_id': s_id, 'semester': semester,
-                'satisfaction_score': s_curr, 'historical_satisfaction_after': h_new
-            })
+            }).execute()
 
         el_map = allocation.elective_map_update(electives, allocations)
         for e_id, el in el_map.items():
-            models.electives_col.update_one({'_id': __import__('bson').ObjectId(e_id)}, {'$set': {'seats_remaining': el['seats_remaining']}})
+            models.supabase.table('electives').update({'seats_remaining': el['seats_remaining']}).eq('id', e_id).execute()
 
         models.set_config_value('allocation_ran', 'true')
     except Exception as e:
@@ -456,6 +589,11 @@ def run():
 def get_results():
     semester = request.args.get('semester', models.get_config_value('current_semester', 'Semester 1'))
     return jsonify(models.get_allocations_by_semester(semester)), 200
+
+@app.route('/api/allocation/history/all', methods=['GET'])
+@jwt_required()
+def get_all_allocation_history():
+    return jsonify(models.get_all_allocations()), 200
 
 @app.route('/api/allocation/history', methods=['GET'])
 @jwt_required()
@@ -481,12 +619,9 @@ def advance_semester():
     models.set_config_value('allocation_status', 'draft')
     models.set_config_value('allocation_ran', 'false')
 
-    models.preferences_col.delete_many({})
+    models.supabase.table('preferences').delete().neq('id', 0).execute()
     for el in models.get_all_electives():
-        models.electives_col.update_one(
-            {'_id': __import__('bson').ObjectId(el['id'])},
-            {'$set': {'seats_remaining': el['capacity']}}
-        )
+        models.supabase.table('electives').update({'seats_remaining': el['capacity']}).eq('id', el['id']).execute()
 
     return jsonify({'message': f'Advanced to {new_semester}.', 'new_semester': new_semester}), 200
 
@@ -494,7 +629,8 @@ def advance_semester():
 @jwt_required()
 def reset():
     try:
-        seed.seed_database()
+        import reset_and_seed
+        reset_and_seed.reset_and_seed()
         return jsonify({'message': 'Database re-seeded successfully.'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -526,4 +662,4 @@ def _calculate_stats(updated_student_map, students, electives, all_prefs, sat_co
     }
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000, use_reloader=False)
+    app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False)

@@ -32,14 +32,12 @@ def get_prsm_satisfaction(rank, total_prefs):
         return 0.0
     return 1.0 - ((rank - 1) / total_prefs)
 
-def apply_running_avg(h_prev, s_curr, n):
+def apply_running_avg(h_prev, s_curr, n=None):
     """
-    Simple Running Average:
-    h_new = (h_prev * n + s_curr) / (n + 1)
-    where n is the number of past semesters already averaged into h_prev.
-    Equivalent to: (sat_1 + sat_2 + ... + sat_n + s_curr) / (n + 1)
+    Simple Average of Previous Historical and Current Satisfaction:
+    h_new = (h_prev + s_curr) / 2
     """
-    return (h_prev * n + s_curr) / (n + 1)
+    return (h_prev + s_curr) / 2.0
 
 def apply_raa(h_prev, s_curr, alpha=0.6):
     """

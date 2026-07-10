@@ -387,3 +387,13 @@ body {
 .glass-table tr:hover {
   background: rgba(255, 255, 255, 0.02);
 }
+
+/* Fix dropdown menu style for dark mode compatibility */
+select option {
+  background-color: #18181b !important; /* Matches zinc-900 background */
+  color: #f4f4f5 !important;            /* Matches white/zinc-100 text */
+}
+
+select {
+  color-scheme: dark; /* Signals browser to render dark-mode scrollbars/menus */
+}

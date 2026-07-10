@@ -7,13 +7,15 @@ with app.app_context():
     for s in students:
         uid = s.id
         history = models.SatisfactionHistory.query.filter_by(user_id=uid).order_by(models.SatisfactionHistory.id.asc()).all()
-        scores = [h.satisfaction_score for h in history]
-        if scores:
-            simple_avg = sum(scores) / len(scores)
-            s.historical_satisfaction = simple_avg
-            print(f'User {uid}: {len(scores)} semesters, scores={[round(x,2) for x in scores]}, avg={simple_avg:.4f}')
+        if history:
+            current_val = 1.0
+            for h in history:
+                current_val = (current_val + h.satisfaction_score) / 2.0
+            s.historical_satisfaction = current_val
+            print(f'User {uid}: {len(history)} semesters, avg={current_val:.4f}')
         else:
-            print(f'User {uid}: no history, keeping 0.0')
+            s.historical_satisfaction = 1.0
+            print(f'User {uid}: no history, set to 1.0')
             
     db.session.commit()
-print('Done - historical_satisfaction recomputed as simple average.')
+print('Done - historical_satisfaction recomputed as sequential simple average.')

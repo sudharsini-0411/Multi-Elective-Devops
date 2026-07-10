@@ -44,7 +44,7 @@ export default function Home({ onGetStarted }) {
           </div>
           <h3 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '12px' }}>The FairElect Solution</h3>
           <p style={{ color: 'var(--text-secondary)' }}>
-            By tracking historical satisfaction via the Running Average Algorithm (RAA), the system calculates a fairness score and adjusts a student's priority weight (λ) dynamically. Dissatisfied students get their scores boosted, ensuring long-term allocation equity.
+            By tracking historical satisfaction via a Simple Running Average, the system calculates a fairness score and adjusts a student's priority weight (λ) dynamically. Dissatisfied students get their scores boosted, ensuring long-term allocation equity.
           </p>
         </div>
       </section>
@@ -73,13 +73,13 @@ export default function Home({ onGetStarted }) {
 
           {/* RAA Card */}
           <div className="glass-panel" style={{ padding: '24px' }}>
-            <div className="badge badge-info" style={{ marginBottom: '12px' }}>Phase 2: RAA</div>
-            <h4 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '8px' }}>Running Average</h4>
+            <div className="badge badge-info" style={{ marginBottom: '12px' }}>Phase 2: SRA</div>
+            <h4 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '8px' }}>Simple Running Average</h4>
             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-              Accumulates satisfaction over semesters with decay factor $\alpha$.
+              Averages satisfaction over all allocations (e.g., (100% Prev + 75% Curr) / 2 = 87.5%).
             </p>
             <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '0.85rem', color: 'var(--accent-primary)', textAlign: 'center' }}>
-              H_new = α·H_prev + (1-α)·S_curr
+              H_new = (H_prev + S_curr) / 2
             </div>
           </div>
 

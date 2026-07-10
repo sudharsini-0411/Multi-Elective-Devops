@@ -1,69 +1,37 @@
-from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash as _check_password_hash
-from bson import ObjectId
-import os
+from supabase import create_client, ClientOptions
 from dotenv import load_dotenv
-from supabase import create_client
+import os
 
 load_dotenv()
 
-# ── MongoDB ──────────────────────────────────────────────────────────────────
-MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/')
-DB_NAME = os.environ.get('DB_NAME', 'fairelect')
-
-client = MongoClient(MONGO_URI)
-mongo = client[DB_NAME]
-
-# Collections
-users_col = mongo['users']
-electives_col = mongo['electives']
-preferences_col = mongo['preferences']
-allocations_col = mongo['allocations']
-satisfaction_col = mongo['satisfaction_history']
-config_col = mongo['system_config']
-
-# Ensure unique indexes
-users_col.create_index('username', unique=True)
-electives_col.create_index('code', unique=True)
-
-# ── Supabase ─────────────────────────────────────────────────────────────────
 SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
 SUPABASE_KEY = os.environ.get('SUPABASE_SERVICE_KEY', '')
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
+
+opts = ClientOptions(headers={'Connection': 'close'})
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY, options=opts)
 
 def check_password_hash(hash_val, password):
     return _check_password_hash(hash_val, password)
 
-# ── ID helpers ──────────────────────────────────────────────────────────────
-def _str(oid):
-    return str(oid)
-
-def _user_out(doc):
-    if not doc:
-        return None
-    doc['id'] = _str(doc['_id'])
-    doc.pop('_id', None)
-    return doc
-
-def _elective_out(doc):
-    if not doc:
-        return None
-    doc['id'] = _str(doc['_id'])
-    doc.pop('_id', None)
-    return doc
-
-# ── Config ───────────────────────────────────────────────────────────────────
+# ── Config ────────────────────────────────────────────────────────────────────
 def get_config_value(key, default=None):
-    doc = config_col.find_one({'key': key})
-    return doc['value'] if doc else default
+    res = supabase.table('system_config').select('value').eq('key', key).execute()
+    if res.data:
+        return res.data[0]['value']
+    return default
 
 def set_config_value(key, value):
-    config_col.update_one({'key': key}, {'$set': {'value': str(value) if value is not None else ''}}, upsert=True)
+    existing = supabase.table('system_config').select('key').eq('key', key).execute()
+    if existing.data:
+        supabase.table('system_config').update({'value': str(value) if value is not None else ''}).eq('key', key).execute()
+    else:
+        supabase.table('system_config').insert({'key': key, 'value': str(value) if value is not None else ''}).execute()
 
-# ── Users ────────────────────────────────────────────────────────────────────
-def create_user(username, password, role, historical_satisfaction=0.0, max_electives=1, name=None, roll_no=None):
+# ── Users ─────────────────────────────────────────────────────────────────────
+def create_user(username, password, role, historical_satisfaction=1.0, max_electives=1, name=None, roll_no=None):
     try:
-        result = users_col.insert_one({
+        res = supabase.table('users').insert({
             'username': username,
             'password_hash': generate_password_hash(password),
             'role': role,
@@ -71,22 +39,34 @@ def create_user(username, password, role, historical_satisfaction=0.0, max_elect
             'max_electives': int(max_electives),
             'name': name,
             'roll_no': roll_no
-        })
-        return _str(result.inserted_id)
+        }).execute()
+        return str(res.data[0]['id']) if res.data else None
     except Exception:
         return None
 
 def get_user_by_username(username):
-    return _user_out(users_col.find_one({'username': username}))
+    res = supabase.table('users').select('*').eq('username', username).execute()
+    if res.data:
+        d = res.data[0]
+        d['id'] = str(d['id'])
+        return d
+    return None
 
 def get_user_by_id(user_id):
-    try:
-        return _user_out(users_col.find_one({'_id': ObjectId(user_id)}))
-    except Exception:
-        return None
+    res = supabase.table('users').select('*').eq('id', user_id).execute()
+    if res.data:
+        d = res.data[0]
+        d['id'] = str(d['id'])
+        return d
+    return None
 
 def get_all_students():
-    return [_user_out(s) for s in users_col.find({'role': 'student'})]
+    res = supabase.table('users').select('*').eq('role', 'student').execute()
+    students = []
+    for d in res.data:
+        d['id'] = str(d['id'])
+        students.append(d)
+    return students
 
 def update_user(user_id, username, password=None, historical_satisfaction=None, max_electives=None, name=None, roll_no=None):
     try:
@@ -101,91 +81,96 @@ def update_user(user_id, username, password=None, historical_satisfaction=None, 
             upd['name'] = name
         if roll_no is not None:
             upd['roll_no'] = roll_no
-        users_col.update_one({'_id': ObjectId(user_id)}, {'$set': upd})
+        supabase.table('users').update(upd).eq('id', user_id).execute()
         return True
     except Exception:
         return False
 
 def delete_user(user_id):
     try:
-        users_col.delete_one({'_id': ObjectId(user_id)})
-        preferences_col.delete_many({'user_id': user_id})
-        allocations_col.delete_many({'user_id': user_id})
-        satisfaction_col.delete_many({'user_id': user_id})
+        supabase.table('preferences').delete().eq('user_id', user_id).execute()
+        supabase.table('allocations').delete().eq('user_id', user_id).execute()
+        supabase.table('satisfaction_history').delete().eq('user_id', user_id).execute()
+        supabase.table('users').delete().eq('id', user_id).execute()
         return True
     except Exception:
         return False
 
-# ── Electives ────────────────────────────────────────────────────────────────
+# ── Electives ─────────────────────────────────────────────────────────────────
 def create_elective(code, name, capacity, instructor):
     try:
-        result = electives_col.insert_one({
-            'code': code,
-            'name': name,
-            'capacity': int(capacity),
-            'seats_remaining': int(capacity),
+        res = supabase.table('electives').insert({
+            'code': code, 'name': name,
+            'capacity': int(capacity), 'seats_remaining': int(capacity),
             'instructor': instructor
-        })
-        return _str(result.inserted_id)
+        }).execute()
+        return str(res.data[0]['id']) if res.data else None
     except Exception:
         return None
 
 def get_all_electives():
-    return [_elective_out(e) for e in electives_col.find()]
+    res = supabase.table('electives').select('*').execute()
+    electives = []
+    for d in res.data:
+        d['id'] = str(d['id'])
+        electives.append(d)
+    return electives
 
 def get_elective_by_id(elective_id):
-    try:
-        return _elective_out(electives_col.find_one({'_id': ObjectId(elective_id)}))
-    except Exception:
-        return None
+    res = supabase.table('electives').select('*').eq('id', elective_id).execute()
+    if res.data:
+        d = res.data[0]
+        d['id'] = str(d['id'])
+        return d
+    return None
 
 def update_elective(elective_id, code, name, capacity, instructor):
     try:
-        el = electives_col.find_one({'_id': ObjectId(elective_id)})
+        el = get_elective_by_id(elective_id)
         if not el:
             return False
         diff = int(capacity) - el['capacity']
         new_seats = max(0, el['seats_remaining'] + diff)
-        electives_col.update_one({'_id': ObjectId(elective_id)}, {'$set': {
+        supabase.table('electives').update({
             'code': code, 'name': name, 'capacity': int(capacity),
             'seats_remaining': new_seats, 'instructor': instructor
-        }})
+        }).eq('id', elective_id).execute()
         return True
     except Exception:
         return False
 
 def delete_elective(elective_id):
     try:
-        electives_col.delete_one({'_id': ObjectId(elective_id)})
-        preferences_col.delete_many({'elective_id': elective_id})
-        allocations_col.delete_many({'elective_id': elective_id})
+        supabase.table('preferences').delete().eq('elective_id', elective_id).execute()
+        supabase.table('allocations').delete().eq('elective_id', elective_id).execute()
+        supabase.table('electives').delete().eq('id', elective_id).execute()
     except Exception:
         pass
 
-# ── Preferences ──────────────────────────────────────────────────────────────
+# ── Preferences ───────────────────────────────────────────────────────────────
 def save_preferences(user_id, preference_list):
     try:
-        preferences_col.delete_many({'user_id': user_id})
+        supabase.table('preferences').delete().eq('user_id', user_id).execute()
         for pref in preference_list:
-            preferences_col.insert_one({
+            supabase.table('preferences').insert({
                 'user_id': user_id,
                 'elective_id': pref['elective_id'],
                 'points': int(pref['points']),
                 'rank': int(pref['rank'])
-            })
+            }).execute()
         return True
     except Exception:
         return False
 
 def get_student_preferences(user_id):
-    prefs = list(preferences_col.find({'user_id': user_id}).sort([('points', -1), ('rank', 1)]))
+    res = supabase.table('preferences').select('*').eq('user_id', user_id).order('points', desc=True).execute()
     result = []
-    for p in prefs:
-        el = get_elective_by_id(p['elective_id'])
+    for p in res.data:
+        el = get_elective_by_id(str(p['elective_id']))
         result.append({
-            'id': _str(p['_id']),
-            'user_id': p['user_id'],
-            'elective_id': p['elective_id'],
+            'id': str(p['id']),
+            'user_id': str(p['user_id']),
+            'elective_id': str(p['elective_id']),
             'points': p['points'],
             'rank': p['rank'],
             'code': el['code'] if el else '',
@@ -196,29 +181,72 @@ def get_student_preferences(user_id):
         })
     return result
 
-# ── Allocations ──────────────────────────────────────────────────────────────
+# ── Allocations ───────────────────────────────────────────────────────────────
 def get_allocations_by_semester(semester):
-    allocs = list(allocations_col.find({'semester': semester}))
+    res = supabase.table('allocations').select('*').eq('semester', semester).execute()
+    if not res.data:
+        return []
+    
+    users_res = supabase.table('users').select('id, username').execute()
+    users_map = {str(u['id']): u for u in users_res.data}
+    
+    electives_res = supabase.table('electives').select('id, code, name').execute()
+    electives_map = {str(e['id']): e for e in electives_res.data}
+    
     result = []
-    for a in allocs:
-        user = get_user_by_id(a['user_id'])
-        el = get_elective_by_id(a['elective_id'])
+    for a in res.data:
+        user = users_map.get(str(a['user_id']))
+        el = electives_map.get(str(a['elective_id']))
         result.append({
-            'id': _str(a['_id']),
-            'user_id': a['user_id'],
-            'elective_id': a['elective_id'],
+            'id': str(a['id']),
+            'user_id': str(a['user_id']),
+            'elective_id': str(a['elective_id']),
             'semester': a['semester'],
             'username': user['username'] if user else '',
             'code': el['code'] if el else '',
-            'name': el['name'] if el else ''
+            'name': el['name'] if el else '',
+            'created_at': a.get('created_at')
+        })
+    return result
+
+def get_all_allocations():
+    res = supabase.table('allocations').select('*').execute()
+    if not res.data:
+        return []
+    
+    users_res = supabase.table('users').select('id, username').execute()
+    users_map = {str(u['id']): u for u in users_res.data}
+    
+    electives_res = supabase.table('electives').select('id, code, name').execute()
+    electives_map = {str(e['id']): e for e in electives_res.data}
+    
+    result = []
+    for a in res.data:
+        user = users_map.get(str(a['user_id']))
+        el = electives_map.get(str(a['elective_id']))
+        result.append({
+            'id': str(a['id']),
+            'user_id': str(a['user_id']),
+            'elective_id': str(a['elective_id']),
+            'semester': a['semester'],
+            'username': user['username'] if user else '',
+            'code': el['code'] if el else '',
+            'name': el['name'] if el else '',
+            'created_at': a.get('created_at')
         })
     return result
 
 def get_student_allocation_history(user_id):
-    allocs = list(allocations_col.find({'user_id': user_id}).sort('semester', 1))
+    res = supabase.table('allocations').select('*').eq('user_id', user_id).order('semester').execute()
+    if not res.data:
+        return []
+    
+    electives_res = supabase.table('electives').select('id, code, name, instructor').execute()
+    electives_map = {str(e['id']): e for e in electives_res.data}
+    
     result = []
-    for a in allocs:
-        el = get_elective_by_id(a['elective_id'])
+    for a in res.data:
+        el = electives_map.get(str(a['elective_id']))
         result.append({
             'semester': a['semester'],
             'code': el['code'] if el else '',
@@ -227,42 +255,42 @@ def get_student_allocation_history(user_id):
         })
     return result
 
-# ── Satisfaction History ─────────────────────────────────────────────────────
+# ── Satisfaction History ──────────────────────────────────────────────────────
 def get_student_satisfaction_history(user_id):
-    history = list(satisfaction_col.find({'user_id': user_id}).sort('_id', 1))
+    res = supabase.table('satisfaction_history').select('*').eq('user_id', user_id).order('id').execute()
     return [{
-        'id': _str(h['_id']),
-        'user_id': h['user_id'],
+        'id': str(h['id']),
+        'user_id': str(h['user_id']),
         'semester': h['semester'],
         'satisfaction_score': h['satisfaction_score'],
         'historical_satisfaction_after': h['historical_satisfaction_after']
-    } for h in history]
+    } for h in res.data]
 
 def add_satisfaction_history(user_id, semester, satisfaction_score, historical_satisfaction_after):
     try:
-        result = satisfaction_col.insert_one({
+        res = supabase.table('satisfaction_history').insert({
             'user_id': user_id,
             'semester': semester,
             'satisfaction_score': float(satisfaction_score),
             'historical_satisfaction_after': float(historical_satisfaction_after)
-        })
-        return _str(result.inserted_id)
+        }).execute()
+        return str(res.data[0]['id']) if res.data else None
     except Exception:
         return None
 
 def update_satisfaction_history(record_id, satisfaction_score, historical_satisfaction_after):
     try:
-        satisfaction_col.update_one({'_id': ObjectId(record_id)}, {'$set': {
+        supabase.table('satisfaction_history').update({
             'satisfaction_score': float(satisfaction_score),
             'historical_satisfaction_after': float(historical_satisfaction_after)
-        }})
+        }).eq('id', record_id).execute()
         return True
     except Exception:
         return False
 
 def delete_satisfaction_history(record_id):
     try:
-        satisfaction_col.delete_one({'_id': ObjectId(record_id)})
+        supabase.table('satisfaction_history').delete().eq('id', record_id).execute()
         return True
     except Exception:
         return False

@@ -2,16 +2,12 @@ import models
 
 def seed_database():
     print("Clearing database...")
-    models.users_col.drop()
-    models.electives_col.drop()
-    models.preferences_col.drop()
-    models.allocations_col.drop()
-    models.satisfaction_col.drop()
-    models.config_col.drop()
-
-    # Recreate indexes
-    models.users_col.create_index('username', unique=True)
-    models.electives_col.create_index('code', unique=True)
+    models.supabase.table('preferences').delete().neq('id', 0).execute()
+    models.supabase.table('allocations').delete().neq('id', 0).execute()
+    models.supabase.table('satisfaction_history').delete().neq('id', 0).execute()
+    models.supabase.table('system_config').delete().neq('key', '').execute()
+    models.supabase.table('users').delete().neq('id', 0).execute()
+    models.supabase.table('electives').delete().neq('id', 0).execute()
 
     print("Seeding initial data...")
 
@@ -61,12 +57,12 @@ def seed_database():
     ]
 
     for username, elective_code, points, rank in preferences_data:
-        models.preferences_col.insert_one({
+        models.supabase.table('preferences').insert({
             'user_id': student_ids[username],
             'elective_id': elective_ids[elective_code],
             'points': points,
             'rank': rank
-        })
+        }).execute()
 
     print("Database seeding completed successfully!")
 

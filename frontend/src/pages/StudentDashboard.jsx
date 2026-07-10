@@ -87,8 +87,16 @@ export default function StudentDashboard({ user, onUpdateUser }) {
 
   const formatTimeLeft = () => {
     if (timeLeft === null || timeLeft <= 0) return '00:00';
-    const mins = Math.floor(timeLeft / 60);
+    const days = Math.floor(timeLeft / (24 * 3600));
+    const hours = Math.floor((timeLeft % (24 * 3600)) / 3600);
+    const mins = Math.floor((timeLeft % 3600) / 60);
     const secs = timeLeft % 60;
+    if (days > 0) {
+      return `${days}d ${hours}h ${mins}m ${secs}s`;
+    }
+    if (hours > 0) {
+      return `${hours}h ${mins}m ${secs}s`;
+    }
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
@@ -114,20 +122,26 @@ export default function StudentDashboard({ user, onUpdateUser }) {
       // 1. Fetch all electives
       const elRes = await fetch(`${API_URL}/electives`, { headers: getAuthHeader() });
       const elData = await elRes.json();
-      setElectives(elData);
+      if (Array.isArray(elData)) {
+        setElectives(elData);
+      }
 
       // 2. Fetch student's current preferences
       const prefRes = await fetch(`${API_URL}/preferences?user_id=${user.id}`, { headers: getAuthHeader() });
       const prefData = await prefRes.json();
-      setDbPreferences(prefData);
+      if (Array.isArray(prefData)) {
+        setDbPreferences(prefData);
+      }
 
       // 3. Fetch allocations for current semester (if published)
       const currentSem = configData.current_semester || 'Semester 1';
       if (configData.allocation_status === 'published') {
         const allocRes = await fetch(`${API_URL}/allocation/results?semester=${encodeURIComponent(currentSem)}`, { headers: getAuthHeader() });
         const allocData = await allocRes.json();
-        const myAllocs = allocData.filter(a => a.user_id === user.id);
-        setAllocation(myAllocs);
+        if (Array.isArray(allocData)) {
+          const myAllocs = allocData.filter(a => a.user_id === user.id);
+          setAllocation(myAllocs);
+        }
       } else {
         setAllocation([]);
       }
@@ -135,22 +149,30 @@ export default function StudentDashboard({ user, onUpdateUser }) {
       // 4. Fetch satisfaction history, max_electives from student record
       const studentRes = await fetch(`${API_URL}/students`, { headers: getAuthHeader() });
       const studentsData = await studentRes.json();
-      const myStudent = studentsData.find(s => s.id === user.id);
-      if (myStudent) {
-        if (myStudent.satisfaction_history) {
-          setSatHistory(myStudent.satisfaction_history);
+      if (Array.isArray(studentsData)) {
+        const myStudent = studentsData.find(s => String(s.id) === String(user.id));
+        if (myStudent) {
+          if (myStudent.satisfaction_history) {
+            setSatHistory(myStudent.satisfaction_history);
+          }
+          const studentMaxEl = myStudent.max_electives || 1;
+          setMaxElectives(studentMaxEl);
+          
+          if (myStudent.historical_satisfaction !== user.historical_satisfaction) {
+            onUpdateUser({ historical_satisfaction: myStudent.historical_satisfaction });
+          }
         }
-        const studentMaxEl = myStudent.max_electives || 1;
-        setMaxElectives(studentMaxEl);
       }
 
       // 5. Fetch FULL allocation history across ALL semesters using dedicated endpoint
       const histRes = await fetch(`${API_URL}/allocation/history?user_id=${user.id}`, { headers: getAuthHeader() });
       const histData = await histRes.json();
-      setAllocHistory(histData);
+      if (Array.isArray(histData)) {
+        setAllocHistory(histData);
+      }
 
       // Initialize rankedPrefs from database preferences if present
-      if (prefData && prefData.length > 0) {
+      if (Array.isArray(prefData) && prefData.length > 0) {
         const loadedPrefs = prefData.map(p => ({
           electiveId: p.elective_id.toString(),
           points: p.points
@@ -206,6 +228,7 @@ export default function StudentDashboard({ user, onUpdateUser }) {
   };
 
   const getAvailableOptionsForSlot = (index) => {
+    if (!Array.isArray(electives)) return [];
     return electives.filter(e => {
       const isSelectedElsewhere = rankedPrefs.some((p, idx) => idx !== index && p.electiveId === e.id.toString());
       return !isSelectedElsewhere;
@@ -380,7 +403,7 @@ export default function StudentDashboard({ user, onUpdateUser }) {
               Historical Satisfaction
             </span>
             <span className="gradient-text" style={{ fontSize: '1.5rem', fontWeight: 800 }}>
-              {isNewStudent ? '0%' : `${((user.historical_satisfaction || 0.0) * 100).toFixed(1)}%`}
+              {isNewStudent ? '100.0%' : `${((user.historical_satisfaction || 0.0) * 100).toFixed(1)}%`}
             </span>
           </div>
 
@@ -390,7 +413,7 @@ export default function StudentDashboard({ user, onUpdateUser }) {
               Priority Status
             </span>
             <span style={{ fontSize: '1.25rem', fontWeight: 800, color: isNewStudent ? 'var(--info)' : 'var(--success)' }}>
-              {isNewStudent ? 'Randomized' : `${((1.0 - (user.historical_satisfaction || 0.0)) * 100).toFixed(0)}% Boost`}
+              {isNewStudent ? 'Baseline (No Boost)' : `${((1.0 - (user.historical_satisfaction || 0.0)) * 100).toFixed(0)}% Boost`}
             </span>
           </div>
         </div>

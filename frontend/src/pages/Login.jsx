@@ -56,7 +56,7 @@ export default function Login({ onLogin }) {
               username: cleanUsername,
               password: password,
               role,
-              historical_satisfaction: role === 'student' ? 0.0 : 0.5
+              historical_satisfaction: role === 'student' ? 1.0 : 0.5
             })
           });
           const data = await response.json();
@@ -78,7 +78,7 @@ export default function Login({ onLogin }) {
             username: fbUser.username,
             password: "firebase_user_" + fbUser.uid,
             role,
-            historical_satisfaction: role === 'student' ? 0.0 : 0.5
+            historical_satisfaction: role === 'student' ? 1.0 : 0.5
           })
         });
         const data = await response.json();
@@ -222,7 +222,7 @@ export default function Login({ onLogin }) {
               username: fbUser.username,
               password: "firebase_user_" + fbUser.uid,
               role: 'student',
-              historical_satisfaction: 0.0
+              historical_satisfaction: 1.0
             })
           });
           const regData = await regResponse.json();

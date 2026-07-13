@@ -74,7 +74,7 @@ export default function AdminDashboard({ user }) {
   const [timeLeft, setTimeLeft] = useState(null);
   const [biddingDuration, setBiddingDuration] = useState(5);
 
-  const API_URL = 'http://localhost:5000/api';
+  const API_URL = import.meta.env.VITE_API_URL || 'https://multi-backend-1.onrender.com/api';
 
   const fetch = (url, options = {}) => {
     const activeUser = user || JSON.parse(localStorage.getItem('fairelect_user') || '{}');

@@ -28,7 +28,7 @@ export default function StudentDashboard({ user, onUpdateUser }) {
   const [config, setConfig] = useState({ bidding_status: 'closed', bidding_deadline: '', server_time: '' });
   const [timeLeft, setTimeLeft] = useState(null);
 
-  const API_URL = 'http://localhost:5000/api';
+  const API_URL = import.meta.env.VITE_API_URL || 'https://multi-backend-1.onrender.com/api';
 
   const getAuthHeader = () => {
     return user && user.token ? { 'Authorization': `Bearer ${user.token}` } : {};

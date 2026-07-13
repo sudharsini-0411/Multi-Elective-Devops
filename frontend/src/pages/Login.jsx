@@ -11,7 +11,7 @@ export default function Login({ onLogin }) {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const API_URL = 'http://localhost:5000/api';
+  const API_URL = import.meta.env.VITE_API_URL || 'https://multi-backend-1.onrender.com/api';
 
   const resetForm = () => {
     setUsername('');

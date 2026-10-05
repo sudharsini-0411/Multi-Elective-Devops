@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multi-elective-frontend
+  namespace: multi-elective
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: multi-elective-frontend
+  template:
+    metadata:
+      labels:
+        app: multi-elective-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: sudharsini/multi-elective-frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80

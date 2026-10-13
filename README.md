@@ -143,7 +143,7 @@ The system provides a structured and transparent elective allocation process, co
 
 Developed as part of a research internship at **National Institute of Technology Calicut (NIT Calicut)**, focusing on fairness-aware elective allocation and historical satisfaction.
 
-## Contributors
+## Contributor
 
 - Sudharsini R
 

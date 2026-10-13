@@ -146,8 +146,8 @@ Developed as part of a research internship at **National Institute of Technology
 ## Contributors
 
 - Sudharsini R
-- Add other team members here
 
 ## License
 
 Add an appropriate license before distributing the project publicly.
+by sudharsini R
